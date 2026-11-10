@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>読みたい本リスト</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap">
+<style>
+:root{--bg:#eef0ec;--panel:#f8f9f6;--ink:#1d2a2f;--muted:#66747a;--line:#d3d9d4;--accent:#1f5f6b;--on:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#14191b;--panel:#1c2326;--ink:#e8ecea;--muted:#98a6ab;--line:#2d383c;--accent:#6fb7c4;--on:#0e1416;color-scheme:dark}}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 "Noto Sans JP","Hiragino Sans","Yu Gothic",Meiryo,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:26px;margin:0 0 20px}
+.add{background:var(--panel);border:1px solid var(--line);padding:16px;margin-bottom:24px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 2px}
+input,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);padding:9px 10px;border-radius:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{font-size:13px;color:var(--accent);min-height:1.7em;margin-top:4px}
+button{font:inherit;cursor:pointer;border-radius:3px}
+.primary{background:var(--accent);color:var(--on);border:0;padding:10px 20px;margin-top:14px;font-weight:700}
+.bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.bar input{grid-column:1/-1}
+.count{font-size:13px;color:var(--muted);margin:0 0 4px}
+ul{list-style:none;margin:0;padding:0}
+.g1{font-weight:700;margin-top:20px;border-top:2px solid var(--ink);padding-top:4px}
+.g2{font-size:13px;color:var(--muted);margin-top:8px}
+li.book{display:flex;gap:14px;padding:14px 0;border-top:1px solid var(--line)}
+.spine{flex:none;width:44px;min-height:96px;display:flex;align-items:center;justify-content:center;color:#fff;border-radius:2px 2px 0 0;font:700 13px/1.2 inherit;writing-mode:vertical-rl;padding:8px 0;letter-spacing:.08em;overflow:hidden}
+.info{flex:1;min-width:0}
+.t{font-weight:700;font-size:16px;line-height:1.5;margin:0;overflow-wrap:anywhere}
+.m{font-size:13px;color:var(--muted);margin:2px 0}
+.memo{font-size:13px;margin:4px 0}
+.act{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.act select{width:auto;padding:5px 8px;font-size:13px}
+.act a{font-size:13px;color:var(--accent)}
+.del{background:none;border:0;color:var(--muted);font-size:13px;padding:4px 6px;margin-left:auto}
+.del:hover{color:var(--ink);text-decoration:underline}
+.empty{padding:28px 0;color:var(--muted);border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>読みたい本リスト</h1>
+
+<section id="login" hidden>
+<label for="email" style="margin-top:0">メールアドレス</label>
+<input id="email" type="email" autocomplete="email">
+<button class="primary" id="loginBtn">ログインリンクを送る</button>
+<div class="hint" id="loginMsg"></div>
+</section>
+
+<div id="app" hidden>
+<section class="add">
+<label for="url" style="margin-top:0">商品ページのリンク</label>
+<input id="url" type="url" inputmode="url" placeholder="https://www.amazon.co.jp/dp/...">
+<div class="hint" id="hint"></div>
+<label for="title">書名</label><input id="title" autocomplete="off">
+<div class="row">
+<div><label for="author">著者</label><input id="author" autocomplete="off"></div>
+<div><label for="pub">出版社</label><input id="pub" autocomplete="off"></div>
+</div>
+<label for="country">著者の国籍</label><select id="country"></select>
+<label for="memo">メモ</label><input id="memo" autocomplete="off">
+<input id="isbn" type="hidden">
+<button class="primary" id="addBtn">リストに追加</button>
+</section>
+
+<div class="bar">
+<input id="q" type="search" placeholder="検索" aria-label="検索">
+<select id="rg" aria-label="地域"></select>
+<select id="cn" aria-label="国"></select>
+<select id="f" aria-label="状態"><option value="all">すべての状態</option><option>読みたい</option><option>購入済み</option><option>読了</option></select>
+<select id="s" aria-label="並び順"><option value="geo">国籍別</option><option value="new">追加順</option><option value="title">書名順</option><option value="author">著者順</option><option value="publisher">出版社順</option></select>
+</div>
+<p class="count" id="count"></p>
+<ul id="list"></ul>
+<button class="del" id="out" style="margin-top:24px">ログアウト</button>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://metieluxexkcsykrytjh.supabase.co/rest/v1/';
+const SUPABASE_ANON_KEY = 'sb_publishable_UOInlShz4V8JUZ1PQrhc9g_JL3JkQLJ';
+
+// 上位カテゴリ(日本+地域)→ 下位カテゴリ(国)。ISO 3166-1 alpha-2
+const REGIONS = {
+  '日本': [['JP','日本']],
+  'アジア': [['CN','中国'],['KR','韓国'],['TW','台湾'],['IN','インド'],['VN','ベトナム'],['TH','タイ'],['ID','インドネシア'],['PH','フィリピン']],
+  '中東': [['TR','トルコ'],['IR','イラン'],['IL','イスラエル']],
+  'ヨーロッパ': [['GB','イギリス'],['IE','アイルランド'],['FR','フランス'],['DE','ドイツ'],['AT','オーストリア'],['CH','スイス'],['IT','イタリア'],['ES','スペイン'],['PT','ポルトガル'],['NL','オランダ'],['SE','スウェーデン'],['NO','ノルウェー'],['PL','ポーランド'],['CZ','チェコ'],['RU','ロシア'],['UA','ウクライナ'],['GR','ギリシャ']],
+  '北米': [['US','アメリカ'],['CA','カナダ']],
+  '中南米': [['MX','メキシコ'],['CO','コロンビア'],['PE','ペルー'],['BR','ブラジル'],['AR','アルゼンチン'],['CL','チリ'],['CU','キューバ']],
+  'アフリカ': [['EG','エジプト'],['NG','ナイジェリア'],['ZA','南アフリカ'],['KE','ケニア']],
+  'オセアニア': [['AU','オーストラリア'],['NZ','ニュージーランド']]
+};
+const ORDER = Object.keys(REGIONS).concat(['その他','未分類']), C = {};
+for (const r in REGIONS) for (const [c, n] of REGIONS[r]) C[c] = { n, r };
+const info = (c) => c ? (C[c] || { n: c, r: 'その他' }) : { n: '未分類', r: '未分類' };
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hue = (s) => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
+const cOpts = (sel) => '<option value="">未分類</option>' +
+  Object.entries(REGIONS).map(([r, l]) => '<optgroup label="' + r + '">' +
+    l.map(([c, n]) => '<option value="' + c + '"' + (c === sel ? ' selected' : '') + '>' + n + '</option>').join('') + '</optgroup>').join('') +
+  (sel && !C[sel] ? '<option value="' + esc(sel) + '" selected>' + esc(sel) + '</option>' : '');
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let items = [];
+
+sb.auth.onAuthStateChange((_e, session) => {
+  $('login').hidden = !!session;
+  $('app').hidden = !session;
+  if (session) setTimeout(load, 0);
+});
+$('loginBtn').onclick = async () => {
+  const { error } = await sb.auth.signInWithOtp({ email: $('email').value.trim(), options: { emailRedirectTo: location.href } });
+  $('loginMsg').textContent = error ? error.message : 'メールのリンクを開いてください';
+};
+$('out').onclick = () => sb.auth.signOut();
+
+async function load() {
+  const { data } = await sb.from('books').select('*').order('added', { ascending: false });
+  items = data || [];
+  render();
+}
+
+// リンク → 書誌情報・国籍を自動入力
+let timer;
+$('url').oninput = () => { clearTimeout(timer); timer = setTimeout(lookup, 500); };
+async function lookup() {
+  const u = $('url').value.trim();
+  if (!/^https?:\/\//i.test(u)) return;
+  $('hint').textContent = '取得中…';
+  try {
+    const d = await (await fetch('/api/lookup?url=' + encodeURIComponent(u))).json();
+    if (d.error) { $('hint').textContent = d.error; return; }
+    $('title').value = d.title || ''; $('author').value = d.author || ''; $('pub').value = d.publisher || '';
+    $('isbn').value = d.isbn || ''; $('country').innerHTML = cOpts(d.country || '');
+    $('hint').textContent = '取得しました。内容を確認してください';
+  } catch (e) { $('hint').textContent = '取得に失敗しました。手入力してください'; }
+}
+
+$('addBtn').onclick = async () => {
+  const title = $('title').value.trim();
+  if (!title) { $('hint').textContent = '書名を入力してください'; $('title').focus(); return; }
+  const url = $('url').value.trim();
+  const row = { title, author: $('author').value.trim(), publisher: $('pub').value.trim(), memo: $('memo').value.trim(),
+    isbn: $('isbn').value || null, url: /^https?:\/\//i.test(url) ? url : null, country: $('country').value || null };
+  const { data, error } = await sb.from('books').insert(row).select().single();
+  if (error) { $('hint').textContent = error.message; return; }
+  items.unshift(data);
+  ['url','title','author','pub','memo','isbn'].forEach((k) => $(k).value = '');
+  $('country').innerHTML = cOpts('');
+  $('hint').textContent = '追加しました';
+  render();
+};
+
+const card = (b) => '<li class="book" data-id="' + b.id + '"><div class="spine" style="background:hsl(' + hue(b.title) + ',34%,32%)" aria-hidden="true">' + esc(b.title.slice(0, 8)) + '</div>' +
+  '<div class="info"><p class="t">' + esc(b.title) + '</p><p class="m">' + [b.author, b.publisher].filter(Boolean).map(esc).join(' / ') + '</p>' +
+  (b.memo ? '<p class="memo">' + esc(b.memo) + '</p>' : '') +
+  '<div class="act"><select data-a="st" aria-label="状態">' + ['読みたい','購入済み','読了'].map((o) => '<option' + (o === b.status ? ' selected' : '') + '>' + o + '</option>').join('') + '</select>' +
+  '<select data-a="cn" aria-label="著者の国籍">' + cOpts(b.country) + '</select>' +
+  (b.url ? '<a href="' + esc(b.url) + '" target="_blank" rel="noopener noreferrer">商品ページ</a>' : '') +
+  '<button class="del" data-a="del">削除</button></div></div></li>';
+
+function render() {
+  const q = $('q').value.trim().toLowerCase(), rg = $('rg').value, cn = $('cn').value, f = $('f').value, s = $('s').value;
+  const l = items.filter((b) => {
+    const i = info(b.country);
+    return (f === 'all' || b.status === f) && (rg === 'all' || i.r === rg) && (cn === 'all' || (b.country || '') === cn) &&
+      (!q || [b.title, b.author, b.publisher, b.memo].join(' ').toLowerCase().includes(q));
+  });
+  l.sort((a, b) => {
+    if (s === 'new') return new Date(b.added) - new Date(a.added);
+    if (s === 'geo') { const x = info(a.country), y = info(b.country); return ORDER.indexOf(x.r) - ORDER.indexOf(y.r) || x.n.localeCompare(y.n, 'ja'); }
+    return (a[s] || '').localeCompare(b[s] || '', 'ja');
+  });
+  $('count').textContent = items.length ? l.length + '冊を表示(全' + items.length + '冊)' : '';
+  if (!l.length) { $('list').innerHTML = '<li class="empty">' + (items.length ? '該当する本がありません。' : 'まだ本がありません。') + '</li>'; return; }
+  const cnt = {};
+  l.forEach((b) => { const i = info(b.country); cnt[i.r] = (cnt[i.r] || 0) + 1; cnt[i.r + '/' + i.n] = (cnt[i.r + '/' + i.n] || 0) + 1; });
+  let h = '', pr = '', pc = '';
+  for (const b of l) {
+    const i = info(b.country);
+    if (s === 'geo') {
+      if (i.r !== pr) { h += '<li class="g1">' + i.r + '(' + cnt[i.r] + ')</li>'; pr = i.r; pc = ''; }
+      if (i.n !== pc) { pc = i.n; if (i.n !== i.r) h += '<li class="g2">' + esc(i.n) + '(' + cnt[i.r + '/' + i.n] + ')</li>'; }
+    }
+    h += card(b);
+  }
+  $('list').innerHTML = h;
+}
+
+$('rg').innerHTML = '<option value="all">すべての地域</option>' + ORDER.map((r) => '<option>' + r + '</option>').join('');
+function fillCn() {
+  const r = $('rg').value;
+  $('cn').innerHTML = '<option value="all">すべての国</option>' + (r === 'all' ? '' : (REGIONS[r] || []).map(([c, n]) => '<option value="' + c + '">' + n + '</option>').join(''));
+  $('cn').disabled = r === 'all';
+}
+fillCn();
+$('country').innerHTML = cOpts('');
+['q', 'cn', 'f', 's'].forEach((k) => $(k).oninput = render);
+$('rg').oninput = () => { fillCn(); render(); };
+
+$('list').onchange = async (e) => {
+  const a = e.target.dataset.a, li = e.target.closest('li');
+  if (!li || (a !== 'st' && a !== 'cn')) return;
+  const k = a === 'st' ? 'status' : 'country', v = e.target.value || null;
+  await sb.from('books').update({ [k]: v }).eq('id', li.dataset.id);
+  items.forEach((b) => { if (b.id === li.dataset.id) b[k] = v; });
+  render();
+};
+$('list').onclick = async (e) => {
+  if (e.target.dataset.a !== 'del') return;
+  const id = e.target.closest('li').dataset.id;
+  await sb.from('books').delete().eq('id', id);
+  items = items.filter((b) => b.id !== id);
+  render();
+};
+</script>
+</body>
+</html>
